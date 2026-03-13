@@ -6,16 +6,11 @@ error_reporting(E_ALL);
 
 require_once __DIR__ . '/config.php';
 
-/**
- * ===== SWPM API 設定 =====
- * 必要に応じて変更してください
- */
-define('SWPM_API_URL', 'http://schoolai.biz/wp-json/swpm-ext/v1/member/create');
+define('SWPM_CREATE_API_URL', 'http://schoolai.biz/wp-json/swpm-ext/v1/member/create');
+define('SWPM_CHANGE_LEVEL_API_URL', 'http://schoolai.biz/wp-json/swpm-ext/v1/member/change-level');
 define('SWPM_API_KEY', 'a9f2Kx8Qz1mN7rT4vYp3Lw6BcD');
 
-/**
- * ===== DB接続 =====
- */
+define('PER_PAGE', 25);
 function getPdo(): PDO
 {
     $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
@@ -26,12 +21,10 @@ function getPdo(): PDO
     ]);
 }
 
-/**
- * ===== SWPM API 実行 =====
- */
-function callSwpmCreateApi(array $payload): array
+function callSwpmApi(string $url, array $payload): array
+
 {
-    $ch = curl_init(SWPM_API_URL);
+    $ch = curl_init($url);
 
     $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -42,7 +35,7 @@ function callSwpmCreateApi(array $payload): array
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'X-API-KEY: ' . SWPM_API_KEY,
-            'Content-Length: ' . strlen($json),
+            'Content-Length: ' . strlen((string) $json),
         ],
         CURLOPT_TIMEOUT => 30,
     ]);
@@ -81,16 +74,9 @@ function callSwpmCreateApi(array $payload): array
     ];
 }
 
-/**
- * ===== usersテーブルへ保存 =====
- * email / user_name の UNIQUE を想定して UPSERT
- */
 function saveUser(PDO $pdo, array $formData, array $apiResult): void
 {
     $swpmMemberId = null;
-    $apiStatus = !empty($apiResult['success']) ? 'success' : 'error';
-    $apiMessage = $apiResult['message'] ?? '';
-    $accountState = 'active';
 
     if (!empty($apiResult['response']['data']['member_id'])) {
         $swpmMemberId = (int) $apiResult['response']['data']['member_id'];
@@ -145,54 +131,81 @@ function saveUser(PDO $pdo, array $formData, array $apiResult): void
         ':first_name'       => $formData['first_name'],
         ':last_name'        => $formData['last_name'],
         ':membership_level' => (int) $formData['membership_level'],
-        ':account_state'    => $accountState,
-        ':api_status'       => $apiStatus,
-        ':api_message'      => $apiMessage,
+        ':account_state'    => 'active',
+        ':api_status'       => !empty($apiResult['success']) ? 'success' : 'error',
+        ':api_message'      => $apiResult['message'] ?? '',
     ]);
 }
 
-$message = '';
-$messageType = '';
-$apiResponsePretty = '';
+function updateMembershipLevel(PDO $pdo, int $userId, int $newLevel, array $apiResult): void
+{
+    $sql = 'UPDATE users
+            SET membership_level = :membership_level,
+                api_status = :api_status,
+                api_message = :api_message,
+                updated_at = NOW()
+            WHERE id = :id';
 
-$form = [
-    'email' => '',
-    'user_name' => '',
-    'password' => '',
-    'first_name' => '',
-    'last_name' => '',
-    'membership_level' => '1',
-];
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':membership_level' => $newLevel,
+        ':api_status' => !empty($apiResult['success']) ? 'success' : 'error',
+        ':api_message' => $apiResult['message'] ?? '',
+        ':id' => $userId,
+    ]);
+}
+
+function sendJson(array $payload): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function passwordExists(PDO $pdo, string $password): bool
+{
+    $stmt = $pdo->prepare('SELECT 1 FROM users WHERE password_plain = :password LIMIT 1');
+    $stmt->execute([':password' => $password]);
+
+    return (bool) $stmt->fetchColumn();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $form['email'] = trim((string)($_POST['email'] ?? ''));
-    $form['user_name'] = trim((string)($_POST['user_name'] ?? ''));
-    $form['password'] = trim((string)($_POST['password'] ?? ''));
-    $form['first_name'] = trim((string)($_POST['first_name'] ?? ''));
-    $form['last_name'] = trim((string)($_POST['last_name'] ?? ''));
-    $form['membership_level'] = trim((string)($_POST['membership_level'] ?? ''));
+    $action = trim((string) ($_POST['action'] ?? ''));
 
-    $errors = [];
+    try {
+        $pdo = getPdo();
 
-    if ($form['email'] === '' || !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'メールアドレスを正しく入力してください。';
-    }
+        if ($action === 'check_password') {
+            $password = trim((string) ($_POST['password'] ?? ''));
+            sendJson([
+                'success' => true,
+                'exists' => $password === '' ? true : passwordExists($pdo, $password),
+            ]);
+        }
 
-    if ($form['user_name'] === '') {
-        $errors[] = 'ユーザー名を入力してください。';
-    }
+        if ($action === 'create_member') {
+            $form = [
+                'email' => trim((string) ($_POST['email'] ?? '')),
+                'user_name' => trim((string) ($_POST['user_name'] ?? '')),
+                'password' => trim((string) ($_POST['password'] ?? '')),
+                'first_name' => trim((string) ($_POST['first_name'] ?? '')),
+                'last_name' => trim((string) ($_POST['last_name'] ?? '')),
+                'membership_level' => trim((string) ($_POST['membership_level'] ?? '')),
+            ];
 
-    if ($form['password'] === '' || strlen($form['password']) < 8) {
-        $errors[] = 'パスワードは8文字以上で入力してください。';
-    }
-
-    if ($form['membership_level'] === '' || !ctype_digit($form['membership_level'])) {
-        $errors[] = '会員レベルを数値で入力してください。';
-    }
-
-    if (empty($errors)) {
-        try {
-            $pdo = getPdo();
+            if ($form['email'] === '' || !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
+                sendJson(['success' => false, 'message' => 'メールアドレスが不正です。']);
+            }
+            if ($form['user_name'] === '') {
+                sendJson(['success' => false, 'message' => 'ユーザー名は必須です。']);
+            }
+            if ($form['password'] === '' || strlen($form['password']) < 8) {
+                sendJson(['success' => false, 'message' => 'パスワードは8文字以上で入力してください。']);
+            }
+            if (!in_array($form['membership_level'], ['2', '4'], true)) {
+                sendJson(['success' => false, 'message' => '会員レベルが不正です。']);
+            }
 
             $apiPayload = [
                 'email' => $form['email'],
@@ -200,182 +213,120 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'password' => $form['password'],
                 'first_name' => $form['first_name'],
                 'last_name' => $form['last_name'],
-                'membership_level' => (int)$form['membership_level'],
+                'membership_level' => (int) $form['membership_level'],
                 'account_state' => 'active',
             ];
 
-            $apiResult = callSwpmCreateApi($apiPayload);
+            $apiResult = callSwpmApi(SWPM_CREATE_API_URL, $apiPayload);
             saveUser($pdo, $form, $apiResult);
 
-            $apiResponsePretty = json_encode(
-                $apiResult['response'],
-                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
-            );
-
-            if (!empty($apiResult['success'])) {
-                $messageType = 'success';
-                $message = '会員登録に成功しました。';
-                $form['password'] = '';
-            } else {
-                $messageType = 'error';
-                $message = 'API実行は失敗しましたが、履歴は users テーブルに保存しました。';
-            }
-        } catch (Throwable $e) {
-            $messageType = 'error';
-            $message = 'エラー: ' . $e->getMessage();
+            sendJson([
+                'success' => !empty($apiResult['success']),
+                'message' => !empty($apiResult['success']) ? '会員を追加しました。' : 'API実行に失敗しました。',
+                'api_message' => $apiResult['message'] ?? '',
+            ]);
         }
-    } else {
-        $messageType = 'error';
-        $message = implode('<br>', $errors);
+
+        if ($action === 'update_level') {
+            $userId = (int) ($_POST['member_id'] ?? 0);
+            $newLevel = (int) ($_POST['membership_level'] ?? 0);
+
+            if ($userId <= 0 || !in_array((string) $newLevel, ['2', '4'], true)) {
+                sendJson(['success' => false, 'message' => '更新パラメータが不正です。']);
+            }
+
+            $stmt = $pdo->prepare('SELECT id, email, swpm_member_id FROM users WHERE id = :id');
+            $stmt->execute([':id' => $userId]);
+            $user = $stmt->fetch();
+            if (!$user) {
+                sendJson(['success' => false, 'message' => '対象ユーザーが見つかりません。']);
+            }
+
+            $payload = [
+                'new_membership_level' => $newLevel,
+            ];
+            if (!empty($user['swpm_member_id'])) {
+                $payload['member_id'] = (int) $user['swpm_member_id'];
+            } else {
+                $payload['email'] = (string) $user['email'];
+            }
+            $apiResult = callSwpmApi(SWPM_CHANGE_LEVEL_API_URL, $payload);
+            updateMembershipLevel($pdo, $userId, $newLevel, $apiResult);
+
+            sendJson([
+                'success' => !empty($apiResult['success']),
+                'message' => !empty($apiResult['success']) ? '会員レベルを更新しました。' : '会員レベル更新APIに失敗しました。',
+                'api_message' => $apiResult['message'] ?? '',
+            ]);
+        }
+        sendJson(['success' => false, 'message' => '不正なアクションです。']);
+    } catch (Throwable $e) {
+        sendJson(['success' => false, 'message' => 'エラー: ' . $e->getMessage()]);
     }
 }
+$pdo = getPdo();
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$offset = ($page - 1) * PER_PAGE;
+
+$total = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+$totalPages = max(1, (int) ceil($total / PER_PAGE));
+
+$stmt = $pdo->prepare('SELECT id, swpm_member_id, email, user_name, first_name, last_name, membership_level, api_status, api_message, updated_at FROM users ORDER BY id DESC LIMIT :limit OFFSET :offset');
+$stmt->bindValue(':limit', PER_PAGE, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
+$users = $stmt->fetchAll();
+
+require __DIR__ . '/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>会員登録ページ</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f7f7f9;
-            margin: 0;
-            padding: 40px 20px;
-            color: #222;
-        }
-        .wrap {
-            max-width: 720px;
-            margin: 0 auto;
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            padding: 24px;
-        }
-        h1 {
-            margin-top: 0;
-            font-size: 24px;
-        }
-        .message {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            line-height: 1.6;
-        }
-        .message.success {
-            background: #edf9f0;
-            border: 1px solid #9fd7ac;
-            color: #1d6b31;
-        }
-        .message.error {
-            background: #fff1f1;
-            border: 1px solid #e0a6a6;
-            color: #a12b2b;
-        }
-        .form-group {
-            margin-bottom: 16px;
-        }
-        label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 6px;
-        }
-        input {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 10px 12px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-        button {
-            border: none;
-            background: #111;
-            color: #fff;
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        button:hover {
-            opacity: .9;
-        }
-        .api-box {
-            margin-top: 24px;
-            padding: 16px;
-            background: #fafafa;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-        }
-        pre {
-            white-space: pre-wrap;
-            word-break: break-word;
-            margin: 0;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-        .note {
-            margin-top: 16px;
-            font-size: 12px;
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-<div class="wrap">
-    <h1>Simple Membership 会員登録</h1>
+<h1>ユーザー一覧</h1>
 
-    <?php if ($message !== ''): ?>
-        <div class="message <?php echo htmlspecialchars($messageType, ENT_QUOTES, 'UTF-8'); ?>">
-            <?php echo $message; ?>
-        </div>
-    <?php endif; ?>
+<div id="flashMessage" class="flash hidden"></div>
 
-    <form method="post" action="">
-        <div class="form-group">
-            <label for="email">メールアドレス</label>
-            <input type="email" name="email" id="email" value="<?php echo htmlspecialchars($form['email'], ENT_QUOTES, 'UTF-8'); ?>" required>
-        </div>
-
-        <div class="form-group">
-            <label for="user_name">ユーザー名</label>
-            <input type="text" name="user_name" id="user_name" value="<?php echo htmlspecialchars($form['user_name'], ENT_QUOTES, 'UTF-8'); ?>" required>
-        </div>
-
-        <div class="form-group">
-            <label for="password">パスワード</label>
-            <input type="text" name="password" id="password" value="<?php echo htmlspecialchars($form['password'], ENT_QUOTES, 'UTF-8'); ?>" required>
-        </div>
-
-        <div class="form-group">
-            <label for="first_name">姓</label>
-            <input type="text" name="first_name" id="first_name" value="<?php echo htmlspecialchars($form['first_name'], ENT_QUOTES, 'UTF-8'); ?>">
-        </div>
-
-        <div class="form-group">
-            <label for="last_name">名</label>
-            <input type="text" name="last_name" id="last_name" value="<?php echo htmlspecialchars($form['last_name'], ENT_QUOTES, 'UTF-8'); ?>">
-        </div>
-
-        <div class="form-group">
-            <label for="membership_level">会員レベル</label>
-            <input type="number" name="membership_level" id="membership_level" value="<?php echo htmlspecialchars($form['membership_level'], ENT_QUOTES, 'UTF-8'); ?>" required>
-        </div>
-
-        <button type="submit">登録する</button>
-    </form>
-
-    <?php if ($apiResponsePretty !== ''): ?>
-        <div class="api-box">
-            <strong>APIレスポンス</strong>
-            <pre><?php echo htmlspecialchars($apiResponsePretty, ENT_QUOTES, 'UTF-8'); ?></pre>
-        </div>
-    <?php endif; ?>
-
-    <div class="note">
-        ※ 現状は users テーブルに password_plain を保存する前提です。<br>
-        ※ 本番運用では平文パスワード保存は避けるのがおすすめです。
-    </div>
+<div class="toolbar">
+    <button id="openCreateModalBtn">追加</button>
 </div>
-</body>
-</html>
+<table class="users-table">
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>メール</th>
+        <th>ユーザー名</th>
+        <th>氏名</th>
+        <th>会員レベル</th>
+        <th>API</th>
+        <th>更新日</th>
+        <th>操作</th>
+    </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($users as $user): ?>
+        <tr
+            data-id="<?php echo (int) $user['id']; ?>"
+            data-email="<?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?>"
+            data-user-name="<?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?>"
+            data-first-name="<?php echo htmlspecialchars((string) $user['first_name'], ENT_QUOTES, 'UTF-8'); ?>"
+            data-last-name="<?php echo htmlspecialchars((string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?>"
+            data-membership-level="<?php echo (int) $user['membership_level']; ?>"
+        >
+            <td><?php echo (int) $user['id']; ?></td>
+            <td><?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?></td>
+            <td><?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+            <td><?php echo htmlspecialchars((string) $user['first_name'] . ' ' . (string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+            <td><?php echo (int) $user['membership_level']; ?></td>
+            <td><?php echo htmlspecialchars((string) $user['api_status'], ENT_QUOTES, 'UTF-8'); ?></td>
+            <td><?php echo htmlspecialchars((string) $user['updated_at'], ENT_QUOTES, 'UTF-8'); ?></td>
+            <td><button class="editBtn" type="button">編集</button></td>
+        </tr>
+    <?php endforeach; ?>
+    </tbody>
+</table>
+
+<div class="pager">
+    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+        <a class="pager-link<?php echo $i === $page ? ' active' : ''; ?>" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+    <?php endfor; ?>
+</div>
+
+<?php require __DIR__ . '/input.php'; ?>
+<?php require __DIR__ . '/footer.php'; ?>
