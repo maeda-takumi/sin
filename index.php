@@ -279,7 +279,7 @@ $offset = ($page - 1) * PER_PAGE;
 $total = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
 $totalPages = max(1, (int) ceil($total / PER_PAGE));
 
-$stmt = $pdo->prepare('SELECT id, swpm_member_id, email, user_name, first_name, last_name, membership_level, api_status, api_message, updated_at FROM users ORDER BY id DESC LIMIT :limit OFFSET :offset');
+$stmt = $pdo->prepare('SELECT id, swpm_member_id, email, user_name, password_plain, first_name, last_name, membership_level, created_at FROM users ORDER BY id DESC LIMIT :limit OFFSET :offset');
 $stmt->bindValue(':limit', PER_PAGE, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
@@ -297,16 +297,14 @@ require __DIR__ . '/header.php';
 <ul class="users-list">
     <?php foreach ($users as $user): ?>
         <li class="user-item">
-            <div class="user-item-main">
-                <p class="user-name"><?php echo htmlspecialchars((string) $user['first_name'] . ' ' . (string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?></p>
-                <p class="user-email"><?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?></p>
-            </div>
             <dl class="user-meta">
-                <div class="meta_inner"><dt>ID</dt><dd><?php echo (int) $user['id']; ?></dd></div>
+                <div class="meta_inner"><dt>姓</dt><dd><?php echo htmlspecialchars((string) $user['first_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>名</dt><dd><?php echo htmlspecialchars((string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>ユーザー名</dt><dd><?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>メールアドレス</dt><dd><?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>パスワード</dt><dd><?php echo htmlspecialchars((string) $user['password_plain'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>会員レベル</dt><dd class="membership-level<?php echo (int) $user['membership_level'] === 4 ? ' is-invalid' : ''; ?>"><?php echo htmlspecialchars(getMembershipLevelLabel((int) $user['membership_level']), ENT_QUOTES, 'UTF-8'); ?></dd></div>
-                <div class="meta_inner"><dt>API</dt><dd><?php echo htmlspecialchars((string) $user['api_status'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
-                <div class="meta_inner"><dt>更新日</dt><dd><?php echo htmlspecialchars((string) $user['updated_at'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>登録日</dt><dd><?php echo htmlspecialchars((string) $user['created_at'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
             </dl>
             <div class="user-actions">
                 <button
