@@ -286,41 +286,37 @@ require __DIR__ . '/header.php';
 <div class="toolbar">
     <button id="openCreateModalBtn">追加</button>
 </div>
-<table class="users-table">
-    <thead>
-    <tr>
-        <th>ID</th>
-        <th>メール</th>
-        <th>ユーザー名</th>
-        <th>氏名</th>
-        <th>会員レベル</th>
-        <th>API</th>
-        <th>更新日</th>
-        <th>操作</th>
-    </tr>
-    </thead>
-    <tbody>
+<ul class="users-list">
     <?php foreach ($users as $user): ?>
-        <tr
-            data-id="<?php echo (int) $user['id']; ?>"
-            data-email="<?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?>"
-            data-user-name="<?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?>"
-            data-first-name="<?php echo htmlspecialchars((string) $user['first_name'], ENT_QUOTES, 'UTF-8'); ?>"
-            data-last-name="<?php echo htmlspecialchars((string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?>"
-            data-membership-level="<?php echo (int) $user['membership_level']; ?>"
-        >
-            <td><?php echo (int) $user['id']; ?></td>
-            <td><?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?></td>
-            <td><?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?></td>
-            <td><?php echo htmlspecialchars((string) $user['first_name'] . ' ' . (string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?></td>
-            <td><?php echo (int) $user['membership_level']; ?></td>
-            <td><?php echo htmlspecialchars((string) $user['api_status'], ENT_QUOTES, 'UTF-8'); ?></td>
-            <td><?php echo htmlspecialchars((string) $user['updated_at'], ENT_QUOTES, 'UTF-8'); ?></td>
-            <td><button class="editBtn" type="button">編集</button></td>
-        </tr>
+        <li class="user-item">
+            <div class="user-item-main">
+                <p class="user-name"><?php echo htmlspecialchars((string) $user['first_name'] . ' ' . (string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?></p>
+                <p class="user-email"><?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?></p>
+            </div>
+            <dl class="user-meta">
+                <div class="meta_inner"><dt>ID</dt><dd><?php echo (int) $user['id']; ?></dd></div>
+                <div class="meta_inner"><dt>ユーザー名</dt><dd><?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>会員レベル</dt><dd><?php echo (int) $user['membership_level']; ?></dd></div>
+                <div class="meta_inner"><dt>API</dt><dd><?php echo htmlspecialchars((string) $user['api_status'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>更新日</dt><dd><?php echo htmlspecialchars((string) $user['updated_at'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+            </dl>
+            <div class="user-actions">
+                <button
+                    class="editBtn"
+                    type="button"
+                    data-id="<?php echo (int) $user['id']; ?>"
+                    data-email="<?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?>"
+                    data-user-name="<?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                    data-first-name="<?php echo htmlspecialchars((string) $user['first_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                    data-last-name="<?php echo htmlspecialchars((string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                    data-membership-level="<?php echo (int) $user['membership_level']; ?>"
+                >
+                    編集
+                </button>
+            </div>
+        </li>
     <?php endforeach; ?>
-    </tbody>
-</table>
+</ul>
 
 <div class="pager">
     <?php for ($i = 1; $i <= $totalPages; $i++): ?>

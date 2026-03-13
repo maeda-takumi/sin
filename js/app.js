@@ -76,17 +76,17 @@ document.getElementById('openCreateModalBtn')?.addEventListener('click', async (
 
 document.querySelectorAll('.editBtn').forEach((btn) => {
     btn.addEventListener('click', (event) => {
-        const row = event.currentTarget.closest('tr');
+        const trigger = event.currentTarget;
         modalTitle.textContent = '会員編集';
         formAction.value = 'update_level';
         formMode.value = 'edit';
-        memberId.value = row.dataset.id;
-        email.value = row.dataset.email;
-        userName.value = row.dataset.userName;
+        memberId.value = trigger.dataset.id;
+        email.value = trigger.dataset.email;
+        userName.value = trigger.dataset.userName;
         password.value = '********';
-        firstName.value = row.dataset.firstName;
-        lastName.value = row.dataset.lastName;
-        membershipLevel.value = row.dataset.membershipLevel === '4' ? '4' : '2';
+        firstName.value = trigger.dataset.firstName;
+        lastName.value = trigger.dataset.lastName;
+        membershipLevel.value = trigger.dataset.membershipLevel === '4' ? '4' : '2';
         setReadonlyForEdit(true);
         openModal();
     });
