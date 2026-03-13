@@ -20,6 +20,14 @@ function getPdo(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 }
+function getMembershipLevelLabel(int $level): string
+{
+    return match ($level) {
+        2 => '購読者',
+        4 => '無効',
+        default => (string) $level,
+    };
+}
 
 function callSwpmApi(string $url, array $payload): array
 
@@ -296,7 +304,7 @@ require __DIR__ . '/header.php';
             <dl class="user-meta">
                 <div class="meta_inner"><dt>ID</dt><dd><?php echo (int) $user['id']; ?></dd></div>
                 <div class="meta_inner"><dt>ユーザー名</dt><dd><?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
-                <div class="meta_inner"><dt>会員レベル</dt><dd><?php echo (int) $user['membership_level']; ?></dd></div>
+                <div class="meta_inner"><dt>会員レベル</dt><dd class="membership-level<?php echo (int) $user['membership_level'] === 4 ? ' is-invalid' : ''; ?>"><?php echo htmlspecialchars(getMembershipLevelLabel((int) $user['membership_level']), ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>API</dt><dd><?php echo htmlspecialchars((string) $user['api_status'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>更新日</dt><dd><?php echo htmlspecialchars((string) $user['updated_at'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
             </dl>
