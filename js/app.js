@@ -28,6 +28,11 @@ function openModal() {
     modal.setAttribute('aria-hidden', 'false');
 }
 
+function refreshPageWithCacheBust() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('_', Date.now().toString());
+    window.location.replace(url.toString());
+}
 function setReadonlyForEdit(enabled) {
     [email, userName, password, firstName, lastName].forEach((el) => {
         el.readOnly = enabled;
@@ -106,6 +111,6 @@ form?.addEventListener('submit', async (event) => {
     showFlash(data.message + (data.api_message ? ` (${data.api_message})` : ''), data.success ? 'success' : 'error');
     if (data.success) {
         closeModal();
-        window.setTimeout(() => window.location.reload(), 500);
+        window.setTimeout(refreshPageWithCacheBust, 500);
     }
 });

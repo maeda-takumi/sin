@@ -23,7 +23,7 @@ function getPdo(): PDO
 function getMembershipLevelLabel(int $level): string
 {
     return match ($level) {
-        2 => '購読者',
+        2 => '有効',
         4 => '無効',
         default => (string) $level,
     };
@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 sendJson(['success' => false, 'message' => 'パスワードは8文字以上で入力してください。']);
             }
             if (!in_array($form['membership_level'], ['2', '4'], true)) {
-                sendJson(['success' => false, 'message' => '会員レベルが不正です。']);
+                sendJson(['success' => false, 'message' => '会員ステータスが不正です。']);
             }
 
             $apiPayload = [
@@ -243,13 +243,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 sendJson(['success' => false, 'message' => '更新パラメータが不正です。']);
             }
 
-            $stmt = $pdo->prepare('SELECT id, email, swpm_member_id FROM users WHERE id = :id');
-            $stmt->execute([':id' => $userId]);
+            $stmt = $pdo->prepare(
+                'SELECT id, email, swpm_member_id, membership_level
+                 FROM users
+                 WHERE id = :id OR swpm_member_id = :swpm_member_id
+                 ORDER BY id = :id_exact DESC
+                 LIMIT 1'
+            );
+            $stmt->execute([
+                ':id' => $userId,
+                ':swpm_member_id' => $userId,
+                ':id_exact' => $userId,
+            ]);
             $user = $stmt->fetch();
             if (!$user) {
                 sendJson(['success' => false, 'message' => '対象ユーザーが見つかりません。']);
             }
 
+            if ((int) $user['membership_level'] === $newLevel) {
+                updateMembershipLevel($pdo, (int) $user['id'], $newLevel, [
+                    'success' => true,
+                    'message' => '変更なし（DB保存のみ）',
+                ]);
+
+                sendJson([
+                    'success' => true,
+                    'message' => '会員ステータスは変更されていませんが、DB状態を保存しました。',
+                    'api_message' => '',
+                ]);
+            }
             $payload = [
                 'new_membership_level' => $newLevel,
             ];
@@ -259,11 +281,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $payload['email'] = (string) $user['email'];
             }
             $apiResult = callSwpmApi(SWPM_CHANGE_LEVEL_API_URL, $payload);
-            updateMembershipLevel($pdo, $userId, $newLevel, $apiResult);
+            updateMembershipLevel($pdo, (int) $user['id'], $newLevel, $apiResult);
 
             sendJson([
                 'success' => !empty($apiResult['success']),
-                'message' => !empty($apiResult['success']) ? '会員レベルを更新しました。' : '会員レベル更新APIに失敗しました。',
+                'message' => !empty($apiResult['success']) ? '会員ステータスを更新しました。' : '会員ステータス更新APIに失敗しました。',
                 'api_message' => $apiResult['message'] ?? '',
             ]);
         }
@@ -287,7 +309,7 @@ $users = $stmt->fetchAll();
 
 require __DIR__ . '/header.php';
 ?>
-<h1>ユーザー一覧</h1>
+<h1>カリキュラム登録ユーザ一覧</h1>
 
 <div id="flashMessage" class="flash hidden"></div>
 
@@ -300,10 +322,10 @@ require __DIR__ . '/header.php';
             <dl class="user-meta">
                 <div class="meta_inner"><dt>姓</dt><dd><?php echo htmlspecialchars((string) $user['first_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>名</dt><dd><?php echo htmlspecialchars((string) $user['last_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
-                <div class="meta_inner"><dt>ユーザー名</dt><dd><?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>LINE名</dt><dd><?php echo htmlspecialchars((string) $user['user_name'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>メールアドレス</dt><dd><?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>パスワード</dt><dd><?php echo htmlspecialchars((string) $user['password_plain'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
-                <div class="meta_inner"><dt>会員レベル</dt><dd class="membership-level<?php echo (int) $user['membership_level'] === 4 ? ' is-invalid' : ''; ?>"><?php echo htmlspecialchars(getMembershipLevelLabel((int) $user['membership_level']), ENT_QUOTES, 'UTF-8'); ?></dd></div>
+                <div class="meta_inner"><dt>会員ステータス</dt><dd class="membership-level<?php echo (int) $user['membership_level'] === 4 ? ' is-invalid' : ''; ?>"><?php echo htmlspecialchars(getMembershipLevelLabel((int) $user['membership_level']), ENT_QUOTES, 'UTF-8'); ?></dd></div>
                 <div class="meta_inner"><dt>登録日</dt><dd><?php echo htmlspecialchars((string) $user['created_at'], ENT_QUOTES, 'UTF-8'); ?></dd></div>
             </dl>
             <div class="user-actions">
