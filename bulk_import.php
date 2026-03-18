@@ -179,12 +179,23 @@ function normalizeHeader(string $value): string
 
 function writeError(string $message): void
 {
-    if (defined('STDERR')) {
+    $isCli = PHP_SAPI === 'cli';
+
+    if ($isCli && defined('STDERR')) {
         fwrite(STDERR, $message);
         return;
     }
 
-    file_put_contents('php://stderr', $message);
+    if ($isCli) {
+        file_put_contents('php://stderr', $message);
+        return;
+    }
+
+    if (!headers_sent()) {
+        header('Content-Type: text/plain; charset=UTF-8');
+    }
+
+    echo $message;
 }
 
 function isHttpUrl(string $value): bool
