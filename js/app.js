@@ -11,11 +11,24 @@ const password = document.getElementById('password');
 const firstName = document.getElementById('first_name');
 const lastName = document.getElementById('last_name');
 const membershipLevel = document.getElementById('membership_level');
+let flashTimeoutId = null;
 
 function showFlash(message, type) {
+    if (flashTimeoutId) {
+        window.clearTimeout(flashTimeoutId);
+        flashTimeoutId = null;
+    }
     flash.textContent = message;
-    flash.classList.remove('hidden', 'success', 'error');
+    flash.classList.remove('hidden', 'success', 'error', 'popup');
     flash.classList.add(type);
+}
+
+function showCopyPopup(message) {
+    showFlash(message, 'success');
+    flash.classList.add('popup');
+    flashTimeoutId = window.setTimeout(() => {
+        flash.classList.add('hidden');
+    }, 1500);
 }
 
 function closeModal() {
@@ -105,10 +118,15 @@ document.querySelectorAll('.copyBtn').forEach((btn) => {
         const copyText = `メールアドレス：${emailAddress}
 パスワード：${plainPassword}
 コンテンツURL：http://schoolai.biz/membership-login/`;
+        const popupMessage = `クリップボードに保存しました。
+
+メールアドレス：${emailAddress}
+パスワード：${plainPassword}
+コンテンツURL：http://schoolai.biz/membership-login/`;
 
         try {
             await navigator.clipboard.writeText(copyText);
-            showFlash('コピーしました。', 'success');
+            showCopyPopup(popupMessage);
         } catch (error) {
             const textarea = document.createElement('textarea');
             textarea.value = copyText;
@@ -119,7 +137,11 @@ document.querySelectorAll('.copyBtn').forEach((btn) => {
             textarea.select();
             const copied = document.execCommand('copy');
             document.body.removeChild(textarea);
-            showFlash(copied ? 'コピーしました。' : 'コピーに失敗しました。', copied ? 'success' : 'error');
+            if (copied) {
+                showCopyPopup(popupMessage);
+            } else {
+                showFlash('コピーに失敗しました。', 'error');
+            }
         }
     });
 });

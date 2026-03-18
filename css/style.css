@@ -151,6 +151,16 @@ button.secondary {
     border-radius: 8px;
 }
 
+.flash.popup {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    width: min(90vw, 420px);
+    margin-bottom: 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    white-space: pre-line;
+}
 .flash.success {
     background: #edf9f0;
     border: 1px solid #9fd7ac;
