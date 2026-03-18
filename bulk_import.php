@@ -177,10 +177,23 @@ function normalizeHeader(string $value): string
     return preg_replace('/\s+/u', '', trim($value)) ?? '';
 }
 
+function writeError(string $message): void
+{
+    if (defined('STDERR')) {
+        fwrite(STDERR, $message);
+        return;
+    }
+
+    file_put_contents('php://stderr', $message);
+}
+
+$argv = $_SERVER['argv'] ?? [];
+$argc = is_array($argv) ? count($argv) : 0;
+
 $usage = "使い方: php bulk_import.php <csv_or_tsv_file> [--membership=2|4] [--dry-run]\n";
 
 if ($argc < 2) {
-    fwrite(STDERR, $usage);
+    writeError($usage);
     exit(1);
 }
 
@@ -198,26 +211,26 @@ foreach (array_slice($argv, 2) as $option) {
 }
 
 if (!in_array($membershipLevel, ['2', '4'], true)) {
-    fwrite(STDERR, "--membership は 2 または 4 を指定してください。\n");
+    writeError("--membership は 2 または 4 を指定してください。\n");
     exit(1);
 }
 
 if (!is_readable($filePath)) {
-    fwrite(STDERR, "ファイルを読めません: {$filePath}\n");
+    writeError("ファイルを読めません: {$filePath}\n");
     exit(1);
 }
 
 $pdo = getPdo();
 $handle = fopen($filePath, 'r');
 if ($handle === false) {
-    fwrite(STDERR, "ファイルを開けませんでした。\n");
+    writeError("ファイルを開けませんでした。\n");
     exit(1);
 }
 
 $firstLine = fgets($handle);
 if ($firstLine === false) {
     fclose($handle);
-    fwrite(STDERR, "ファイルが空です。\n");
+    writeError("ファイルが空です。\n");
     exit(1);
 }
 
@@ -227,7 +240,7 @@ rewind($handle);
 $header = fgetcsv($handle, 0, $delimiter);
 if ($header === false) {
     fclose($handle);
-    fwrite(STDERR, "ヘッダー行を読めませんでした。\n");
+    writeError("ヘッダー行を読めませんでした。\n");
     exit(1);
 }
 
@@ -240,7 +253,7 @@ $requiredHeaders = ['LINE名', 'メールアドレス', '姓', '名'];
 foreach ($requiredHeaders as $requiredHeader) {
     if (!array_key_exists(normalizeHeader($requiredHeader), $headerMap)) {
         fclose($handle);
-        fwrite(STDERR, "必須ヘッダー不足: {$requiredHeader}\n");
+        writeError("必須ヘッダー不足: {$requiredHeader}\n");
         exit(1);
     }
 }
