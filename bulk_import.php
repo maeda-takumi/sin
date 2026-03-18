@@ -249,28 +249,32 @@ function openCsvHandle(string $pathOrUrl)
 
     return $handle;
 }
-$argv = $_SERVER['argv'] ?? [];
-$argc = is_array($argv) ? count($argv) : 0;
-
-$usage = "使い方: php bulk_import.php <csv_or_tsv_file_or_url> [--membership=2|4] [--dry-run]\n";
-
-if ($argc < 2) {
-    writeError($usage);
-    exit(1);
-}
-
-$filePath = $argv[1];
+$isCli = PHP_SAPI === 'cli';
+$filePath = __DIR__ . '/list.csv'
 $membershipLevel = '2';
 $dryRun = false;
 
-foreach (array_slice($argv, 2) as $option) {
-    if (str_starts_with($option, '--membership=')) {
-        $membershipLevel = substr($option, strlen('--membership='));
+if ($isCli) {
+    $argv = $_SERVER['argv'] ?? [];
+
+    foreach (array_slice(is_array($argv) ? $argv : [], 1) as $option) {
+        if (str_starts_with($option, '--membership=')) {
+            $membershipLevel = substr($option, strlen('--membership='));
+        }
+        if ($option === '--dry-run') {
+            $dryRun = true;
+        }
     }
-    if ($option === '--dry-run') {
-        $dryRun = true;
+} else {
+    header('Content-Type: text/plain; charset=UTF-8');
+
+    if (isset($_GET['membership'])) {
+        $membershipLevel = (string) $_GET['membership'];
     }
+
+    $dryRun = isset($_GET['dry_run']) && $_GET['dry_run'] === '1';
 }
+
 
 if (!in_array($membershipLevel, ['2', '4'], true)) {
     writeError("--membership は 2 または 4 を指定してください。\n");
