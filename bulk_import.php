@@ -187,10 +187,72 @@ function writeError(string $message): void
     file_put_contents('php://stderr', $message);
 }
 
+function isHttpUrl(string $value): bool
+{
+    if (!filter_var($value, FILTER_VALIDATE_URL)) {
+        return false;
+    }
+
+    $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+
+    return in_array($scheme, ['http', 'https'], true);
+}
+
+function openCsvHandle(string $pathOrUrl)
+{
+    if (isHttpUrl($pathOrUrl)) {
+        $ch = curl_init($pathOrUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+
+        $body = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError !== '') {
+            writeError("URL取得に失敗しました: {$curlError}\n");
+            return false;
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            writeError("URL取得に失敗しました: HTTP {$httpCode}\n");
+            return false;
+        }
+
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            writeError("一時ストリームを作成できませんでした。\n");
+            return false;
+        }
+
+        fwrite($handle, (string) $body);
+        rewind($handle);
+
+        return $handle;
+    }
+
+    if (!is_readable($pathOrUrl)) {
+        writeError("ファイルを読めません: {$pathOrUrl}\n");
+        return false;
+    }
+
+    $handle = fopen($pathOrUrl, 'r');
+    if ($handle === false) {
+        writeError("ファイルを開けませんでした。\n");
+        return false;
+    }
+
+    return $handle;
+}
 $argv = $_SERVER['argv'] ?? [];
 $argc = is_array($argv) ? count($argv) : 0;
 
-$usage = "使い方: php bulk_import.php <csv_or_tsv_file> [--membership=2|4] [--dry-run]\n";
+$usage = "使い方: php bulk_import.php <csv_or_tsv_file_or_url> [--membership=2|4] [--dry-run]\n";
 
 if ($argc < 2) {
     writeError($usage);
@@ -215,15 +277,9 @@ if (!in_array($membershipLevel, ['2', '4'], true)) {
     exit(1);
 }
 
-if (!is_readable($filePath)) {
-    writeError("ファイルを読めません: {$filePath}\n");
-    exit(1);
-}
-
 $pdo = getPdo();
-$handle = fopen($filePath, 'r');
+$handle = openCsvHandle($filePath);
 if ($handle === false) {
-    writeError("ファイルを開けませんでした。\n");
     exit(1);
 }
 
