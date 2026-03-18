@@ -250,7 +250,7 @@ function openCsvHandle(string $pathOrUrl)
     return $handle;
 }
 $isCli = PHP_SAPI === 'cli';
-$filePath = __DIR__ . '/list.csv'
+$filePath = __DIR__ . '/list.csv';
 $membershipLevel = '2';
 $dryRun = false;
 
