@@ -13,7 +13,7 @@
             </div>
 
             <div class="form-group">
-                <label for="user_name">ユーザー名</label>
+                <label for="user_name">LINE名</label>
                 <input type="text" name="user_name" id="user_name" required>
             </div>
 
@@ -38,7 +38,7 @@
             <div class="form-group">
                 <label for="membership_level">会員レベル</label>
                 <select name="membership_level" id="membership_level" required>
-                    <option value="2">購読者</option>
+                    <option value="2">有効</option>
                     <option value="4">無効</option>
                 </select>
             </div>
