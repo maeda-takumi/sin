@@ -297,11 +297,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pdo = getPdo();
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $offset = ($page - 1) * PER_PAGE;
+$search = trim((string) ($_GET['search'] ?? ''));
+$searchLike = '%' . $search . '%';
 
-$total = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+$countSql = 'SELECT COUNT(*) FROM users';
+if ($search !== '') {
+    $countSql .= ' WHERE first_name LIKE :search OR last_name LIKE :search OR email LIKE :search';
+}
+$countStmt = $pdo->prepare($countSql);
+if ($search !== '') {
+    $countStmt->bindValue(':search', $searchLike, PDO::PARAM_STR);
+}
+$countStmt->execute();
+$total = (int) $countStmt->fetchColumn();
 $totalPages = max(1, (int) ceil($total / PER_PAGE));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * PER_PAGE;
 
-$stmt = $pdo->prepare('SELECT id, swpm_member_id, email, user_name, password_plain, first_name, last_name, membership_level, created_at FROM users ORDER BY id DESC LIMIT :limit OFFSET :offset');
+$listSql = 'SELECT id, swpm_member_id, email, user_name, password_plain, first_name, last_name, membership_level, created_at
+            FROM users';
+if ($search !== '') {
+    $listSql .= ' WHERE first_name LIKE :search OR last_name LIKE :search OR email LIKE :search';
+}
+$listSql .= ' ORDER BY id DESC LIMIT :limit OFFSET :offset';
+
+$stmt = $pdo->prepare($listSql);
+if ($search !== '') {
+    $stmt->bindValue(':search', $searchLike, PDO::PARAM_STR);
+}
 $stmt->bindValue(':limit', PER_PAGE, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
@@ -309,11 +332,20 @@ $users = $stmt->fetchAll();
 
 require __DIR__ . '/header.php';
 ?>
-<h1>カリキュラム登録ユーザ一覧</h1>
+<h1>収益コンテンツ登録ユーザ一覧</h1>
 
 <div id="flashMessage" class="flash hidden"></div>
 
 <div class="toolbar">
+    <form method="get" class="search-form">
+        <input
+            type="search"
+            name="search"
+            placeholder="姓・名・メールアドレスで検索"
+            value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>"
+        >
+        <button type="submit">検索</button>
+    </form>
     <button id="openCreateModalBtn">追加</button>
 </div>
 <ul class="users-list">
@@ -341,6 +373,14 @@ require __DIR__ . '/header.php';
                 >
                     編集
                 </button>
+                <button
+                    class="copyBtn"
+                    type="button"
+                    data-email="<?php echo htmlspecialchars((string) $user['email'], ENT_QUOTES, 'UTF-8'); ?>"
+                    data-password="<?php echo htmlspecialchars((string) $user['password_plain'], ENT_QUOTES, 'UTF-8'); ?>"
+                >
+                    コピー
+                </button>
             </div>
         </li>
     <?php endforeach; ?>
@@ -348,7 +388,12 @@ require __DIR__ . '/header.php';
 
 <div class="pager">
     <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <a class="pager-link<?php echo $i === $page ? ' active' : ''; ?>" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+        <a
+            class="pager-link<?php echo $i === $page ? ' active' : ''; ?>"
+            href="?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>"
+        >
+            <?php echo $i; ?>
+        </a>
     <?php endfor; ?>
 </div>
 

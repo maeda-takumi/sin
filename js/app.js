@@ -97,6 +97,32 @@ document.querySelectorAll('.editBtn').forEach((btn) => {
     });
 });
 
+document.querySelectorAll('.copyBtn').forEach((btn) => {
+    btn.addEventListener('click', async (event) => {
+        const trigger = event.currentTarget;
+        const emailAddress = trigger.dataset.email ?? '';
+        const plainPassword = trigger.dataset.password ?? '';
+        const copyText = `メールアドレス：${emailAddress}
+パスワード：${plainPassword}
+コンテンツURL：http://schoolai.biz/membership-login/`;
+
+        try {
+            await navigator.clipboard.writeText(copyText);
+            showFlash('コピーしました。', 'success');
+        } catch (error) {
+            const textarea = document.createElement('textarea');
+            textarea.value = copyText;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'absolute';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            const copied = document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showFlash(copied ? 'コピーしました。' : 'コピーに失敗しました。', copied ? 'success' : 'error');
+        }
+    });
+});
 document.querySelectorAll('[data-close-modal="1"]').forEach((el) => {
     el.addEventListener('click', closeModal);
 });
